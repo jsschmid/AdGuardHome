@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/AdguardTeam/AdGuardHome/internal/filtering"
 	"github.com/AdguardTeam/dnsproxy/proxy"
@@ -16,6 +17,7 @@ import (
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/netutil"
+	"github.com/AdguardTeam/golibs/stringutil"
 	"github.com/google/uuid"
 )
 
@@ -58,11 +60,11 @@ func (uid *UID) UnmarshalText(data []byte) error {
 
 // Persistent contains information about persistent clients.
 type Persistent struct {
-	// UpstreamConfig is the custom upstream configuration for this client.  If
+	// upstreamConfig is the custom upstream configuration for this client.  If
 	// it's nil, it has not been initialized yet.  If it's non-nil and empty,
 	// there are no valid upstreams.  If it's non-nil and non-empty, these
 	// upstream must be used.
-	UpstreamConfig *proxy.CustomUpstreamConfig
+	upstreamConfig *proxy.CustomUpstreamConfig
 
 	// SafeSearch handles search engine hosts rewrites.
 	SafeSearch filtering.SafeSearch
@@ -187,6 +189,71 @@ func (c *Persistent) SetIDs(ids []string) (err error) {
 	slices.Sort(c.ClientIDs)
 
 	return nil
+}
+
+// UpstreamConfig is a custom upstream configuration for the persistent client.
+type UpstreamConfig struct {
+	Bootstrap               upstream.Resolver
+	UpstreamTimeout         time.Duration
+	BootstrapPreferIPv6     bool
+	EDNSClientSubnetEnabled bool
+	UseHTTP3Upstreams       bool
+}
+
+// isCommentOrEmpty returns true if s starts with a "#" character or is empty.
+// This function is useful for filtering out non-upstream lines from upstream
+// configs.
+func isCommentOrEmpty(s string) (ok bool) {
+	return len(s) == 0 || s[0] == '#'
+}
+
+// upstreamHTTPVersions returns the HTTP versions for upstream configuration
+// depending on configuration.
+func upstreamHTTPVersions(http3 bool) (v []upstream.HTTPVersion) {
+	if !http3 {
+		return upstream.DefaultHTTPVersions
+	}
+
+	return []upstream.HTTPVersion{
+		upstream.HTTPVersion3,
+		upstream.HTTPVersion2,
+		upstream.HTTPVersion11,
+	}
+}
+
+// UpstreamConfig returns the custom upstream configuration for the client.
+func (c *Persistent) UpstreamConfig() (conf *proxy.CustomUpstreamConfig) {
+	return c.upstreamConfig
+}
+
+// setUpstreamConfig sets the custom upstream configuration for the client.
+func (c *Persistent) setUpstreamConfig(conf *UpstreamConfig) {
+	upstreams := stringutil.FilterOut(c.Upstreams, isCommentOrEmpty)
+	if len(upstreams) == 0 {
+		return
+	}
+
+	upsConf, err := proxy.ParseUpstreamsConfig(
+		upstreams,
+		&upstream.Options{
+			Bootstrap:    conf.Bootstrap,
+			Timeout:      time.Duration(conf.UpstreamTimeout),
+			HTTPVersions: upstreamHTTPVersions(conf.UseHTTP3Upstreams),
+			PreferIPv6:   conf.BootstrapPreferIPv6,
+		},
+	)
+	if err != nil {
+		// Should not happen because upstreams are already validated.  See
+		// [Persistent.validate].
+		panic(err)
+	}
+
+	c.upstreamConfig = proxy.NewCustomUpstreamConfig(
+		upsConf,
+		c.UpstreamsCacheEnabled,
+		int(c.UpstreamsCacheSize),
+		conf.EDNSClientSubnetEnabled,
+	)
 }
 
 // subnetCompare is a comparison function for the two subnets.  It returns -1 if
@@ -315,8 +382,8 @@ func (c *Persistent) ShallowClone() (clone *Persistent) {
 
 // CloseUpstreams closes the client-specific upstream config of c if any.
 func (c *Persistent) CloseUpstreams() (err error) {
-	if c.UpstreamConfig != nil {
-		if err = c.UpstreamConfig.Close(); err != nil {
+	if c.upstreamConfig != nil {
+		if err = c.upstreamConfig.Close(); err != nil {
 			return fmt.Errorf("closing upstreams of client %q: %w", c.Name, err)
 		}
 	}

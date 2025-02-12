@@ -558,6 +558,16 @@ func (s *Server) prepareUpstreamSettings(boot upstream.Resolver) (err error) {
 
 	s.conf.UpstreamConfig = uc
 
+	if s.conf.ClientStorage != nil {
+		s.conf.ClientStorage.SetUpstreamConfig(&client.UpstreamConfig{
+			Bootstrap:               boot,
+			UpstreamTimeout:         s.conf.UpstreamTimeout,
+			BootstrapPreferIPv6:     s.conf.BootstrapPreferIPv6,
+			EDNSClientSubnetEnabled: s.conf.EDNSClientSubnet.Enabled,
+			UseHTTP3Upstreams:       s.conf.UseHTTP3Upstreams,
+		})
+	}
+
 	return nil
 }
 

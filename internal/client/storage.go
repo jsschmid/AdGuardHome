@@ -622,3 +622,10 @@ func (s *Storage) RangeRuntime(f func(rc *Runtime) (cont bool)) {
 func (s *Storage) AllowedTags() (tags []string) {
 	return s.allowedTags
 }
+
+// SetUpstreamConfig sets the upstream configuration for the persistent clients.
+func (s *Storage) SetUpstreamConfig(conf *UpstreamConfig) {
+	for _, p := range s.index.uidToClient {
+		p.setUpstreamConfig(conf)
+	}
+}
