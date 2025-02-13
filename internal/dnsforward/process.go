@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AdguardTeam/AdGuardHome/internal/client"
 	"github.com/AdguardTeam/AdGuardHome/internal/filtering"
 	"github.com/AdguardTeam/dnsproxy/proxy"
 	"github.com/AdguardTeam/golibs/log"
@@ -573,18 +574,28 @@ func (s *Server) dhcpHostFromRequest(q *dns.Question) (reqHost string) {
 
 // setCustomUpstream sets custom upstream settings in pctx, if necessary.
 func (s *Server) setCustomUpstream(pctx *proxy.DNSContext, clientID string) {
-	if !pctx.Addr.IsValid() || s.conf.ClientsContainer == nil {
+	if !pctx.Addr.IsValid() || s.conf.ClientStorage == nil {
 		return
 	}
 
 	// Use the ClientID first, since it has a higher priority.
 	id := cmp.Or(clientID, pctx.Addr.Addr().String())
-	upsConf, err := s.conf.ClientsContainer.UpstreamConfigByID(id, s.bootstrap)
-	if err != nil {
-		log.Error("dnsforward: getting custom upstreams for client %s: %s", id, err)
-
+	c, ok := s.conf.ClientStorage.Find(id)
+	if !ok {
 		return
 	}
+
+	s.serverLock.RLock()
+	defer s.serverLock.RUnlock()
+
+	upsConf := c.UpstreamConfig(&client.UpstreamConfig{
+		Bootstrap:               s.bootstrap,
+		BootstrapAddrs:          s.conf.BootstrapDNS,
+		UpstreamTimeout:         s.conf.UpstreamTimeout,
+		BootstrapPreferIPv6:     s.conf.BootstrapPreferIPv6,
+		EDNSClientSubnetEnabled: s.conf.EDNSClientSubnet.Enabled,
+		UseHTTP3Upstreams:       s.conf.UseHTTP3Upstreams,
+	})
 
 	if upsConf != nil {
 		log.Debug("dnsforward: using custom upstreams for client %s", id)

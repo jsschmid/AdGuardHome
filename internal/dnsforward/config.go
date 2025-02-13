@@ -29,19 +29,6 @@ import (
 	"github.com/ameshkov/dnscrypt/v2"
 )
 
-// ClientsContainer provides information about preconfigured DNS clients.
-type ClientsContainer interface {
-	// UpstreamConfigByID returns the custom upstream configuration for the
-	// client having id, using boot to initialize the one if necessary.  It
-	// returns nil if there is no custom upstream configuration for the client.
-	// The id is expected to be either a string representation of an IP address
-	// or the ClientID.
-	UpstreamConfigByID(
-		id string,
-		boot upstream.Resolver,
-	) (conf *proxy.CustomUpstreamConfig, err error)
-}
-
 // Config represents the DNS filtering configuration of AdGuard Home.  The zero
 // Config is empty and ready for use.
 type Config struct {
@@ -50,9 +37,8 @@ type Config struct {
 	// FilterHandler is an optional additional filtering callback.
 	FilterHandler func(cliAddr netip.Addr, clientID string, settings *filtering.Settings) `yaml:"-"`
 
-	// ClientsContainer stores the information about special handling of some
-	// DNS clients.
-	ClientsContainer ClientsContainer `yaml:"-"`
+	// ClientStorage stores information about persistent clients.
+	ClientStorage *client.Storage `yaml:"-"`
 
 	// Anti-DNS amplification
 
