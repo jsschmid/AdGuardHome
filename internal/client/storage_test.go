@@ -425,6 +425,36 @@ func TestClientsDHCP(t *testing.T) {
 		return storage.Shutdown(testutil.ContextWithTimeout(t, testTimeout))
 	})
 
+	require.True(t, t.Run("find_runtime_lower_priority", func(t *testing.T) {
+		// Add a lower-priority client.
+		ns := []arpdb.Neighbor{{
+			Name: cliName1,
+			IP:   cliIP1,
+		}}
+
+		testutil.RequireSend(t, arpCh, ns, testTimeout)
+
+		storage.ReloadARP(testutil.ContextWithTimeout(t, testTimeout))
+
+		cli1 := storage.ClientRuntime(cliIP1)
+		require.NotNil(t, cli1)
+
+		assert.True(t, compareRuntimeInfo(cli1, client.SourceDHCP, cliName1))
+
+		// Remove the matching client.
+		//
+		// TODO(a.garipov):  Consider adding ways of explicitly clearing runtime
+		// sources by source.
+		ns = []arpdb.Neighbor{{
+			Name: otherARPCliName,
+			IP:   otherARPCliIP,
+		}}
+
+		testutil.RequireSend(t, arpCh, ns, testTimeout)
+
+		storage.ReloadARP(testutil.ContextWithTimeout(t, testTimeout))
+	}))
+
 	require.True(t, t.Run("find_runtime", func(t *testing.T) {
 		cli1 := storage.ClientRuntime(cliIP1)
 		require.NotNil(t, cli1)
@@ -472,36 +502,6 @@ func TestClientsDHCP(t *testing.T) {
 
 			return compareRuntimeInfo(cli, client.SourceDHCP, cliName1)
 		}, testTimeout, testTimeout/10)
-	}))
-
-	require.True(t, t.Run("find_runtime_lower_priority", func(t *testing.T) {
-		// Add a lower-priority client.
-		ns := []arpdb.Neighbor{{
-			Name: cliName1,
-			IP:   cliIP1,
-		}}
-
-		testutil.RequireSend(t, arpCh, ns, testTimeout)
-
-		storage.ReloadARP(testutil.ContextWithTimeout(t, testTimeout))
-
-		cli1 := storage.ClientRuntime(cliIP1)
-		require.NotNil(t, cli1)
-
-		assert.True(t, compareRuntimeInfo(cli1, client.SourceDHCP, cliName1))
-
-		// Remove the matching client.
-		//
-		// TODO(a.garipov):  Consider adding ways of explicitly clearing runtime
-		// sources by source.
-		ns = []arpdb.Neighbor{{
-			Name: otherARPCliName,
-			IP:   otherARPCliIP,
-		}}
-
-		testutil.RequireSend(t, arpCh, ns, testTimeout)
-
-		storage.ReloadARP(testutil.ContextWithTimeout(t, testTimeout))
 	}))
 
 	require.True(t, t.Run("find_persistent", func(t *testing.T) {
