@@ -1,8 +1,6 @@
 package client
 
-import (
-	"net/netip"
-)
+import "net/netip"
 
 // runtimeIndex stores information about runtime clients.
 type runtimeIndex struct {

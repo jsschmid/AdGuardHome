@@ -409,11 +409,12 @@ func TestClientsDHCP(t *testing.T) {
 
 	ctx := testutil.ContextWithTimeout(t, testTimeout)
 	storage, err := client.NewStorage(ctx, &client.StorageConfig{
-		Logger:            slogutil.NewDiscardLogger(),
-		ARPDB:             arpDB,
-		DHCP:              dhcp,
-		EtcHosts:          etcHosts,
-		RuntimeSourceDHCP: true,
+		Logger:                 slogutil.NewDiscardLogger(),
+		ARPDB:                  arpDB,
+		DHCP:                   dhcp,
+		EtcHosts:               etcHosts,
+		RuntimeSourceDHCP:      true,
+		ARPClientsUpdatePeriod: testTimeout / 10,
 	})
 	require.NoError(t, err)
 
